@@ -2,7 +2,14 @@
 
 A script that sets up a Raspberry Pi as a GNSS-disciplined NTP server, using your distribution's own packages. Download it, read it, then run it. Afterward, the [TrueOffset](https://trueoffset.app) Mac app's checkup can look the server over.
 
-**Not ready yet.** Nothing here is built. This is the plan.
+**Not ready yet.** Version 0.1.0 only looks: run it with no options and it prints what it found and what it would change, and changes nothing. `--apply` isn't built.
+
+```
+python3 setup.py                  # dry run, NTPsec
+python3 setup.py --daemon chrony  # dry run, chrony
+```
+
+If it finds NTPsec, chrony or gpsd built from source, as the 2018 HOWTO did, it reports that and stops. It manages only the distribution's packages and won't replace a working build.
 
 ## What it will do
 
