@@ -1,0 +1,29 @@
+# trueoffset-server-setup
+
+A script that sets up a Raspberry Pi as a GNSS-disciplined NTP server, using your distribution's own packages. Download it, read it, then run it. Afterward, the [TrueOffset](https://trueoffset.app) Mac app's checkup can look the server over.
+
+**Not ready yet.** Nothing here is built. This is the plan.
+
+## What it will do
+
+- **Supported:** Raspberry Pi OS on Debian 13 (Trixie) and 12 (Bookworm). Older releases get a plain refusal.
+- **Boards and receivers:** supported means tested. That's the Pi 4B, Pi 3B+, CM4 and CM5, with u-blox M8, M8T and F9T receivers on Uputronics and TimeHat boards.
+  - It probes for clock chips, the board, the receiver and the pulse pin.
+  - Anything it finds that hasn't been tested is reported, with the line it would add, and changed only with your go-ahead.
+- **Your choice of time daemon:** NTPsec or chrony, as your distribution packages them, with gpsd. Nothing is built from source.
+- **NTS (optional):** a Let's Encrypt certificate through certbot's DNS check (Cloudflare first), or a certificate you supply. Renewal reloads the daemon.
+- **Safe to re-run:** it changes only what's out of line, and a dry run prints every change first.
+- **Records versions:** it writes its own version and every package's version on the server.
+- **Public-server defaults:** rate limits, no management queries, and the NTP Pool's operator guidance cited. It links to joining the Pool but never registers you.
+- **A desktop image:** it offers to boot to the console instead, explains why, and leaves the packages installed. Raspberry Pi OS Lite is recommended.
+- **A timing receiver:** it explains the day-long survey of the antenna's position and asks before starting it.
+
+It's one Python 3 file, standard library only.
+
+## Credit
+
+Inspired by Eric S. Raymond's [Stratum-1 Microserver HOWTO](https://www.ntpsec.org/white-papers/stratum-1-microserver-howto/) for NTPsec (2018). This script is written fresh, and none of the HOWTO's text or scripts is copied. Where the HOWTO built gpsd and NTPsec from git for Raspbian Stretch, this uses current distribution packages and adds the Compute Modules.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
