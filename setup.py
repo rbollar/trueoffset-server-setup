@@ -231,7 +231,7 @@ def make_plan(m, daemon):
         plan.change(f"Install {', '.join(missing)} with apt.", "The distribution's own packages; nothing is built.")
 
     if m.pps_pin is None:
-        plan.change("Add dtoverlay=pps-gpio,gpiopin=18 to config.txt.", "The receiver's pulse reaches the kernel through this overlay. Pin 18 is the usual one on GNSS boards; check yours.")
+        plan.change("Add dtoverlay=pps-gpio,gpiopin=18 to config.txt.", "The receiver's pulse reaches the kernel through this overlay. Pin 18 is Uputronics' pin; John Miller's TimeHat uses pin 4. Check yours.")
     if "enable_uart=1" not in m.config_lines():
         plan.change("Add enable_uart=1 to config.txt.", "The receiver's serial line needs the UART.")
     if any(a.startswith(("console=serial0", "console=ttyAMA0", "console=ttyS0")) for a in m.cmdline):
