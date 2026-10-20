@@ -14,7 +14,7 @@ If it finds NTPsec, chrony or gpsd built from source, as the 2018 HOWTO did, it 
 ## What it will do
 
 - **Supported:** Raspberry Pi OS on Debian 13 (Trixie) and 12 (Bookworm). Older releases get a plain refusal.
-- **Boards and receivers:** supported means tested. That's the Pi 4B, Pi 3B+, CM4 and CM5, with u-blox M8, M8T and F9T receivers on Uputronics boards and John Miller's [TimeHat](https://millerjs.org/?action=page&url=timehat), the original (2021: a DS3231 clock on I²C and a u-blox receiver, pulse on GPIO 4), not the Raspberry Pi 5 TimeHAT that Jeff Geerling has written about.
+- **Boards and receivers:** supported means tested. That's the Pi 4B, Pi 3B+, CM4 and CM5, with u-blox M8, M8T and F9T receivers on Uputronics boards, and on a custom TimeHat with an LEA-M8T timing receiver. That board grew out of John Miller's [TimeHat](https://millerjs.org/?action=page&url=timehat) (a DS3231 clock on I²C, pulse on GPIO 4), whose standard version carries a MAX-M8Q and hasn't been tested. Neither is the Raspberry Pi 5 TimeHAT that Jeff Geerling has written about.
   - It probes for clock chips, the board, the receiver and the pulse pin.
   - Anything it finds that hasn't been tested is reported, with the line it would add, and changed only with your go-ahead.
 - **Your choice of time daemon:** NTPsec or chrony, as your distribution packages them, with gpsd. Nothing is built from source.
