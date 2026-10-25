@@ -206,7 +206,7 @@ def make_plan(m, daemon):
     for name, d in m.daemons.items():
         if d["running"] and not d["package"]:
             plan.stop(f"{name} here runs from {d['exe'] or 'an unknown file'}, which no package owns, so it was "
-                      "built from source. This script manages only the distribution's packages, and it won't "
+                      "built from source. This version doesn't manage builds it didn't make, and it won't "
                       "replace a working build.")
     other = "chronyd" if daemon == "ntpsec" else "ntpd"
     if m.daemons[other]["running"] and m.daemons[other]["package"]:
