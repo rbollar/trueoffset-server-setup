@@ -42,7 +42,7 @@ Each choice comes from something measured on our own servers, a cited source, or
 - **A full-day survey for a timing receiver.** A 9.6-hour single-band survey read 3.45 m low; at 24 hours it was within 0.08 m. Each meter is about 3.3 ns in the pulse.
 - **Public-server defaults.** Rate limits and no management queries, following the NTP Pool's operator guidance. On our own network, the default limits refused a client polling every second, so we lifted them for the LAN. What the script does about that isn't decided.
 - **Services flagged but not yet turned off** (ModemManager, Bluetooth, swap, and others): each waits for a source. ModemManager has evidence already: it probes serial ports with AT commands, and it ran on all four of our Pis until we masked it.
-- **The journal.** Undecided. Keeping it in memory saves the card, but after a hang it left us nothing to read.
+- **A journal kept on the card, capped.** A journal kept in memory saves the card, but it's lost at every restart, along with what led up to a hang. Our Pi 3B+'s hangs could be read only because its journal was on the card. So the script proposes `Storage=persistent` with `SystemMaxUse=64M`.
 
 ## Credit
 
