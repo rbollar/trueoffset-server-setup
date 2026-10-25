@@ -36,7 +36,7 @@ RTC_CHIPS = {"rv3028": "Micro Crystal RV-3028", "ds3231": "Maxim DS3231", "ds130
 # service is running or enabled, and nothing here is applied until it has a source.
 UNNEEDED_SERVICES = {
     "triggerhappy.service": "listens for hotkeys from a keyboard",
-    "ModemManager.service": "manages mobile-broadband modems",
+    "ModemManager.service": "probes serial ports with AT commands, which can disturb a GNSS receiver on the UART",
     "bluetooth.service": "runs Bluetooth",
     "hciuart.service": "attaches the Bluetooth chip to a serial port the receiver may need",
     "avahi-daemon.service": "announces the machine on the local network (mDNS)",
@@ -82,7 +82,11 @@ class Machine:
         self.default_target = (run(["systemctl", "get-default"]) or "").strip()
         self.desktop = self._desktop()
         self.services = self._services(UNNEEDED_SERVICES)
-        self.journal_storage = self._journal_storage()
+        self.journal_storage, self.journal_max_use = self._journal()
+        # Kernel consoles, from the first word of each line in /proc/consoles ("ttyAMA0 -W- (EC p a) 204:64")
+        self.consoles = [line.split()[0] for line in (read("/proc/consoles") or "").splitlines() if line.split()]
+        sysrq = (read("/proc/sys/kernel/sysrq") or "").strip()
+        self.sysrq = int(sysrq) if sysrq.isdigit() else None
 
     @staticmethod
     def _release():
@@ -134,7 +138,10 @@ class Machine:
                 except OSError:
                     exe = None
                 if not exe or not os.path.exists(exe):
-                    exe = shutil.which(name) or (f"/usr/local/sbin/{name}" if os.path.exists(f"/usr/local/sbin/{name}") else None)
+                    # /proc/<pid>/exe is root's to read; without sudo, look where the daemons are installed,
+                    # since /usr/sbin isn't on an ordinary user's PATH
+                    exe = shutil.which(name) or next((f"{d}/{name}" for d in ("/usr/local/sbin", "/usr/sbin", "/sbin")
+                                                      if os.path.exists(f"{d}/{name}")), None)
                 owner = run(["dpkg", "-S", exe]) if exe else None
                 return {"running": True, "exe": exe, "package": owner.split(":")[0] if owner else None}
         return {"running": False, "exe": None, "package": None}
@@ -164,14 +171,15 @@ class Machine:
         return found
 
     @staticmethod
-    def _journal_storage():
-        storage = "auto"
+    def _journal():
+        """journald's Storage and SystemMaxUse, the last setting of each winning, as journald reads them."""
+        settings = {"Storage": "auto", "SystemMaxUse": None}
         for path in ["/etc/systemd/journald.conf", *sorted(glob.glob("/etc/systemd/journald.conf.d/*.conf"))]:
             for line in (read(path) or "").splitlines():
-                m = re.match(r"\s*Storage\s*=\s*(\S+)", line)
+                m = re.match(r"\s*(Storage|SystemMaxUse)\s*=\s*(\S+)", line)
                 if m:
-                    storage = m.group(1)
-        return storage
+                    settings[m.group(1)] = m.group(2)
+        return settings["Storage"], settings["SystemMaxUse"]
 
 
 class Plan:
@@ -219,8 +227,17 @@ def make_plan(m, daemon):
             plan.notes.append(f"{clock['device']} (the board's own clock) reads 0 V: no backup cell, or a flat one.")
     for name, state in m.services.items():
         plan.notes.append(f"{name} is {state}: it {UNNEEDED_SERVICES[name]}. Proposed for turning off once its guidance is sourced.")
-    if m.journal_storage != "volatile":
-        plan.notes.append(f"The journal's Storage is {m.journal_storage}, so it writes to the card. Proposed: volatile, once sourced.")
+    # Kept on the card, and capped: when a server hangs, the journal on the card is what shows where it stopped.
+    # A journal kept in memory is lost at the power cycle that ends the hang.
+    if m.journal_storage == "auto" and not os.path.isdir("/var/log/journal"):
+        plan.notes.append("The journal's Storage is auto and /var/log/journal doesn't exist, so it's kept in memory and lost at "
+                          "every restart, along with what led up to a hang. Proposed: Storage=persistent with SystemMaxUse=64M.")
+    elif m.journal_storage in ("volatile", "none"):
+        plan.notes.append(f"The journal's Storage is {m.journal_storage}, so it's lost at every restart, along with what led up to "
+                          "a hang. Proposed: Storage=persistent with SystemMaxUse=64M.")
+    elif not m.journal_max_use:
+        plan.notes.append("The journal is kept on the card with no SystemMaxUse, so journald caps it at 10% of the file system, up to 4 GB. "
+                          "Proposed: SystemMaxUse=64M.")
 
     if plan.stops:
         return plan
@@ -236,6 +253,19 @@ def make_plan(m, daemon):
         plan.change("Add enable_uart=1 to config.txt.", "The receiver's serial line needs the UART.")
     if any(a.startswith(("console=serial0", "console=ttyAMA0", "console=ttyS0")) for a in m.cmdline):
         plan.change("Remove the serial console from cmdline.txt.", "The receiver needs that serial port.")
+    # The firmware's enable_uart=1 can make the UART a console with no console= in cmdline.txt; /proc/consoles shows it
+    uart = {os.path.basename(m.serial)} if m.serial else {"ttyAMA0", "ttyAMA10", "ttyS0"}
+    on_console = sorted(uart.intersection(m.consoles))
+    if on_console and "console=tty1" not in m.cmdline:
+        plan.change("Add console=tty1 to cmdline.txt.",
+                    f"{', '.join(on_console)}, the receiver's serial port, is a kernel console in /proc/consoles, though "
+                    "cmdline.txt may not name it. The kernel then writes its messages to the receiver and reads the "
+                    "receiver's bytes as console input.")
+    if m.sysrq not in (None, 0):
+        plan.change("Set kernel.sysrq = 0 in /etc/sysctl.d/90-no-sysrq.conf.",
+                    f"It's {m.sysrq} here. On a serial console, a break followed by a character is a SysRq command, which "
+                    "can kill every task, remount the disk read-only, or reboot (docs.kernel.org/admin-guide/sysrq.html). "
+                    "A receiver on that port can send one by chance.")
 
     for address, name in m.i2c.items():
         if name in RTC_CHIPS and not any(c["name"] and address in c["name"] for c in m.rtcs):
@@ -269,7 +299,8 @@ def report(m, plan, daemon):
     for name, version in sorted(m.packages.items()):
         print(f"  Package:  {name} {version}")
     print(f"  Boots to: {m.default_target or 'unknown'}" + (" (a desktop)" if m.desktop else ""))
-    print(f"  Journal:  Storage={m.journal_storage}")
+    print(f"  Journal:  Storage={m.journal_storage}" + (f", SystemMaxUse={m.journal_max_use}" if m.journal_max_use else ""))
+    print(f"  Consoles: {', '.join(m.consoles) or 'none listed'}; SysRq {m.sysrq if m.sysrq is not None else 'unknown'}")
     print(f"  Daemon:   {daemon} (chosen with --daemon)\n")
 
     if plan.stops:
